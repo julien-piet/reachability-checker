@@ -131,24 +131,24 @@ class solver:
         
         
 a = 1
-u = 0.1
-x0 = interval(0.5,1)
+u = 1
+x0 = interval(2,3)
 delta = 1
-n = 10
+n = 4
 slv = solver(a,u,x0,n,delta)
 slv.run()
 print(slv.range)
 # Visualisation
 fig2 = plt.figure()
 ax = fig2.add_subplot(111)
-ax.set_xlim([0, 10])
-ax.set_ylim([0, np.exp(10)])
+ax.set_xlim([0, 4])
+ax.set_ylim([0, 3*np.exp(4)])
 for i in slv.range:
     polygon= plt.Polygon(i, edgecolor='r')
     ax.add_patch(polygon)
     
 # Exponential for comparison
-time = np.linspace(0,10,50)
+time = np.linspace(0,4,50)
 plt.plot(time, slv.reach[0].a*np.exp(a*time), color='y')
 plt.plot(time, slv.reach[0].b*np.exp(a*time), color='y')
 plt.show() 
