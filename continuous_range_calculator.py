@@ -125,8 +125,8 @@ class solver:
         #Adding to range
         self.range.append([])
         self.range[-1].append([t, self.reach[current_step].b])
-        self.range[-1].append([t, phi + (gamma * t) - u])
-        self.range[-1].append([t + d, phi + (gamma * (t+delta)) - u])
+        self.range[-1].append([t, phi + (gamma * t) - beta])
+        self.range[-1].append([t + d, phi + (gamma * (t+delta)) - beta])
         self.range[-1].append([t + d, self.reach[current_step+1].b])
         
         
