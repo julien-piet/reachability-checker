@@ -66,6 +66,7 @@ class solver:
         U(t) : random noize (Max abs value U)
         
         initial value in interval x0
+        x0 positive (TBF)
         
         For n steps of duration d
     '''
@@ -114,12 +115,12 @@ class solver:
         # Zonotope calculation
         # secant --- y : gamma * t + b
         # tangent -- y : gamma * t + phi
-        Amp = self.reach[0].a
+        start = self.reach[current_step].a
         A = self.A
         t = current_step * d
-        gamma = Amp * np.exp(A*t) * (np.exp(A*d) - 1)  / d
-        b = (Amp * np.exp(A*t)) - (gamma * t)
-        phi = gamma * (1 - np.log((gamma / (Amp * A)))) / A
+        gamma = start * (np.exp(A*d) - 1)  / d
+        b = start - (gamma * t)
+        phi = gamma * (1 - A*t - np.log((gamma / (start * A)))) / A
         
         #Adding to range
         self.range.append([])
@@ -136,7 +137,7 @@ delta = 1
 n = 10
 slv = solver(a,u,x0,n,delta)
 slv.run()
-
+print(slv.range)
 # Visualisation
 fig2 = plt.figure()
 ax = fig2.add_subplot(111)
