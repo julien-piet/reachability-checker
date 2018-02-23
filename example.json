@@ -1,0 +1,31 @@
+{
+    "nodes":{
+        "Start": {
+            "equation": "x_dot = 2x + 1 ± 0.5",
+            "guard": "x - 3 < 0"
+            },
+        "End": {
+            "equation": "x_dot = -2x ± 0.5",
+            "guard": "x - 3 >= 0"
+            }
+        },
+        
+    "links":[
+        {
+            "src": "Start",
+            "dst": "End",
+            "guard": "x + 3 >= 0",
+            "init": "x = x"
+        },
+        {
+            "src": "End",
+            "dst": "Start",
+            "guard": "x + 3 < 0",
+            "init": "x = x"
+        }
+    ],
+    
+    "init": { "interval" : "[0,1]", "node": "Start"}
+
+}
+            
