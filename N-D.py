@@ -3,10 +3,27 @@
 import numpy as np
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
-
+from scipy.linalg import expm, sinm, cosm, det
 
 def norme(vector):
     return np.sqrt(sum(x**2 for x in vector))
+    
+
+def lin_solver(eq1, v1, dir, values):
+    '''
+        returns the coordinates of the intersection point, if it exists
+    '''
+    N = len(eq1)
+    M = np.zeros([[1 if j == i else 0 for j in range(N)] for i in range(N)])
+    M[dir] = eq1
+    b = np.array(values)
+    b[dir] = v1
+    
+    try:
+        return np.linalg.solve(M,b)
+    except LinAlgError:
+        return None
+    
 
 class polyhedra:
     '''
@@ -115,64 +132,65 @@ class polyhedra:
         B = np.array(values)
         n = A.shape[1]
         m = A.shape[0]
-        return polyhedra(m,n,A,B) 
+        return polyhedra(m,n,A,B)    
         
-    
+    def intersect_box(self, other):
+        '''
+            returns the intersection of the polyhedra with a box, approximated to the nearest box.
+            method : calculate intersection of each hyperplan, approximate it as a box, intersect boxes.
+        '''
+        rtn = None
+        min_p = other.min_p
+        max_p = other.max_p
+        for i in range(self.m):
+            for p in other.points:
+                
+                
+        
 
 
-class interval:
+class box:
     '''
-        representation of an interval
-        [a, b]
+        representation of a box
     '''
     
     def __init__(self, a, b):
-        if a <= b:
-            self.a = a
-            self.b = b
-            self.void = False
-        else:
-            self.void = True
+        self.min_p = np.array([min(a[i], b[i]) for i in range(len(a))])
+        self.max_p = np.array([max(a[i], b[i]) for i in range(len(a))])
+        self.points = []
+        for i in range(2**len(self.min_p)):
+            changes = [i & 2**j for j in range(len(self.min_p))]
+            self.points.append(np.array([self.max_p[j] + changes[j]*(self.min_p[j] - self.max_p[j]) for j in range(len(self.min_p))]))
             
     def __str__(self):
-        return "[" + str(self.a) + "," + str(self.b) + "]"
+        return "[" + str(self.min_p) + "," + str(self.max_p) + "]"
             
     def union(this, other):
         '''
             returns the union of this interval and the other, and any space in between
         '''
-        if other.void:
-            return interval(this.a, this.b)
-        if this.void:
-            return interval(other.a, other.b)
+        return box(np.array([min(this.min_p[i], other.min_p[i]) for i in range(len(this.min_p))]), np.array([max(this.max_p[i], other.max_p[i]) for i in range(len(this.max_p))]))
         
-        return interval(min(this.a, other.a), max(this.b, other.b))
-    
-    def union_set(intervals):
+    def intersection(this, other):
         '''
-            Returns the union of all given intervals. Non-destructive
+            returns the intersection of this interval and the other
         '''
-        union = interval(intervals[0].a, intervals[0].b)
-        for elt in intervals[1:]:
-            union = interval.union(elt, union)
-        return union
+        mins = np.array([max(this.min_p[i], other.min_p[i]) for i in range(len(this.min_p))])
+        maxs = np.array([min(this.max_p[i], other.max_p[i]) for i in range(len(this.max_p))])
+        return None if any(mins[i] > maxs[i] for i in range(len(mins))) else box(mins, maxs)
         
     def multiply(self, f):
         '''
             Returns a new instance of interval, given by the multiplication of its original value by f)
         '''
-        if f > 0:
-            return interval(self.a * f, self.b * f)
-        elif f < 0:
-            return interval(self.b * f, self.a * f)
-        return interval(0,0)
+        return box(np.dot(f, self.min_p), np.dot(f, self.max_p))
         
     def fuzz(self, delta):
         '''
             Modifies the interval by adding a fuzzing factor
         '''
-        self.a = self.a - delta
-        self.b = self.b + delta
+        self.min_p -= delta[0]
+        self.max_p += delta[1]
 
 class solver:
     '''
@@ -192,7 +210,6 @@ class solver:
         # User defined variables
         
         self.A = A
-        self.U = U
         self.n = n
         self.d = d
         
@@ -211,61 +228,40 @@ class solver:
             Run the algorithm and store reachabilities in array self.reach
         '''        
         #Calculate beta, the bloating factor
-        beta = self.U * ((np.exp(self.A * self.d) - 1) / self.A)
+        #beta = self.U * ((expm(self.A * self.d) - 1) / det(self.A))
         
         current_step = 0
         for i in range(n):
-            self.iteration(current_step, beta)
+            self.iteration(current_step)
             current_step += 1
     
     
-    def iteration(self, current_step, beta):
+    def iteration(self, current_step):
         ''' 
             Calculate Reach for the next step
         '''
         d = self.d
+        print(expm(self.A))
         # First, calculate the next reach
-        self.reach[current_step+1] = self.reach[current_step].multiply(np.exp(self.d * self.A))
-        self.reach[current_step+1].fuzz(beta)
+        self.reach[current_step+1] = self.reach[current_step].multiply(expm(self.d * self.A))
+        #self.reach[current_step+1].fuzz(beta)
         
         # Now, update range (optimize here - Uses zonotope)
-        # Zonotope calculation
-        # secant --- y : gamma * t + b
-        # tangent -- y : gamma * t + phi
-        start = self.reach[current_step].a
-        A = self.A
         t = current_step * d
-        gamma = start * (np.exp(A*d) - 1)  / d
-        b = start - (gamma * t)
-        phi = gamma * (1 - A*t - np.log((gamma / (start * A)))) / A
-        
-        #Adding to range
-        self.range.append([])
-        self.range[-1].append([t, self.reach[current_step].b])
-        self.range[-1].append([t, phi + (gamma * t) - beta])
-        self.range[-1].append([t + d, phi + (gamma * (t+delta)) - beta])
-        self.range[-1].append([t + d, self.reach[current_step+1].b])
+        large_area = box.union(self.reach[current_step], self.reach[current_step+1])
+        self.range.append(box(np.append([t], large_area.min_p), np.append([t+d], large_area.max_p)))
         
         
-a = 1
-u = 0
-x0 = interval(2,3)
-delta = 1
+A = np.array([[0,-1],[1,0]])
+U = 0
+x0 = box(np.array([0,0]), np.array([1,1]))
+d = 1
 n = 4
-slv = solver(a,u,x0,n,delta)
-slv.run()
-print(slv.range)
-# Visualisation
-fig2 = plt.figure()
-ax = fig2.add_subplot(111)
-ax.set_xlim([0, 4])
-ax.set_ylim([0, 3*np.exp(4)])
-for i in slv.range:
-    polygon= plt.Polygon(i, edgecolor='r')
-    ax.add_patch(polygon)
-    
-# Exponential for comparison
-time = np.linspace(0,4,50)
-plt.plot(time, slv.reach[0].a*np.exp(a*time), color='y')
-plt.plot(time, slv.reach[0].b*np.exp(a*time), color='y')
-plt.show() 
+
+crc = solver(A,U,x0,n,d)
+crc.run()
+
+print(A)
+print(x0)
+for b in crc.range:
+    print(b)
