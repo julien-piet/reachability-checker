@@ -1,73 +1,125 @@
 '''
-    parser.py - Parse a json to create an automaton object. Only for 1D for the moment
-    To incorporate time : add another variable, with t_dot = 1
-    For ND, should build systems by itself (TODO)
-    FIXME : add support for decimal numbers
+    parser.py - Parse a json to create an automaton object.
 '''
 import json
 import re
 import numpy as np
 
-def parse(filename="example.json"):
-    '''
-        Actual parser function
-        For syntax see example.json
-    '''
-    data = json.load(open(filename))
-    am = automaton()
-    
-    for node_name in data["nodes"]:
-        am.nodes[node_name] = (node(equation_translator(data["nodes"][node_name]["equation"]),guard_translator(data["nodes"][node_name]["guard"]))
-    for link in data["links"]:
-        new_link = link(am.nodes[link["src"]], am.nodes[link["dst"]],guard_translator(link["guard"]),update_translator(link["update"]))
-        if new_link.src in am.links:
-            am.links[new_link.src].append(new_link)
-        else:
-            am.links[new_link.src] = [new_link]
-            
-    am.init_node(data["init"]["node"])
-    am.init_interval(interval_translator(data["init"]["interval"]))
-    
-    
-def interval_translator(input):
-    '''
-        Takes an interval [A,B], outputs the interval object
-    '''
-    regex = re.compile("^\[(?<A>(?<Asign>-|)\d*),(?<B>(?<Bsign>-|)\d*)\]$")
-    parts = re.match(regex, input)
-    if not parts:
-        print("Unrecognized interval")
-        return interval(1,0)
-    A = int(match.group("A") or 0)
-    B = int(match.group("B") or 0)
-    Asign = match.group("Asign") or "+"
-    Bsign = match.group("Bsign") or "+"
-    if Asign == "-":
-        A = -A
-    if Bsign == "-":
-        B = -B
+import automaton as am
+from interval import Interval
+from equation import Equation
 
-    return interval(A,B)
-    
-    
-def equation_translator(input):
+def parseFile(filename):
     '''
-        Takes an equation under format 'x_dot = Ax + B ± C' and returns an equation object
+       Parse a json file to generate an automaton
+       For syntax, see example.json
     '''
-    regex = re.compile("^x_dot[ ]*=[ ]*(((?<A>.*?)x)|)[ ]*(?<sign>[\+-]|)[ ]*(?<B>.*?)[ ]*(±(?<C>.*?)|)$")
-    parts = re.match(regex, input) 
-    if not parts:
-        print("Unrecognized equation")
-        return equation(0,0,0)
-    A = int(match.group("A") or 0)
-    B = int(match.group("B") or 0)
-    C = int(match.group("C") or 0)
-    sign = match.group("sign") or "+"
+
+    data = json.load(open(filename))
+    auto = am.Automaton()
+
+    for name in data['nodes']:
+        node = am.Node(auto, name)
+        if 'eqs' in data['nodes'][name]:
+            node.set_equation(parse_system(data['nodes'][name]['eqs']))
+
+    for link in data['links']:
+        src = auto.nodes[link['src']]
+        dst = auto.nodes[link['dst']]
+        link = am.Link(auto, src, dst)
+
+    auto.set_init_interval(parse_init_interval(data['init']))
+    auto.set_init_node(data['entry'])
+
+    return auto
+
+
+
+eq_name_regex = re.compile("([a-zA-Z]+)' *= *")
+eq_params_regex = re.compile("((?:\+|-)? *[0-9]+(?:\.[0-9]*)?) *([a-zA-Z]+)")
+eq_bias_regex = re.compile("(?:(±) *([0-9]+(?:\.[0-9]*)?))|(?:(\+|-) *\[ *((?:\+|-)?[0-9]+(?:\.[0-9]*)?) *; *((?:\+|-)?[0-9]+(?:\.[0-9]*)?) *\])")
+
+def parse_system(eqs):
+    '''
+        Parse an array of lin dif eq, and create the corresponding n-dimensional equation X' = AX + O(E)
+    '''
+    system_vars, system = [], {}
+    for eq in eqs:
+        e = parse_equation(eq)
+        if e['var'] not in system_vars:
+            system_vars.append(e['var'])
+        for v in e['params']:
+            if v not in system_vars:
+                system_vars.append(v)
+        system[e['var']] = e
+
+    system_mat, system_error = [], []
+    for v in system_vars:
+        eq_line = []
+        for p in system_vars:
+            if p in system[v]['params']:
+                eq_line.append(system[v]['params'][p])
+            else:
+                eq_line.append(0)
+        system_mat.append(eq_line)
+        system_error.append(system[v]['error'].toList())
+
+    return Equation(np.transpose(np.array(system_vars)), np.array(system_mat), np.array(system_error))
+
+def parse_equation(eq):
+    '''
+        Parse a linear differential equation of the form "x = Ax + By + ... (+[a;b] | ±c)"
+    '''
+    # First, find the variable is equation acts on
+    m = re.match(eq_name_regex, eq)
+    if not m:
+        raise Exception('Invalid equation syntax', eq)
+    var_name = m.group(1)
+
+    # Then determine linear parameters
+    params = {}
+    for mm in re.finditer(eq_params_regex, eq):
+        params[mm.group(2)] = float(mm.group(1).replace(' ', ''))
+
+    # Finally, find error
+    error = Interval()
+    m = re.search(eq_bias_regex, eq)
+    if m:
+        if m.group(1) != None:
+            error.fromMax(float(m.group(2)))
+        else:
+            error.fromInterval(m.group(3), float(m.group(4)), float(m.group(5)))    
     
-    if sign == "-":
-        B = -B
-    
-    return equation(A, B, C)
+    return {'var': var_name, 'params': params, 'error': error}
+
+def parse_update_system(eqs):
+    '''
+        Parse and array of update, and create the corresponding n-dimensional guard X = AX + B
+    '''
+    pass
+
+def parse_guard_system(eqs):
+    '''
+        Parse an array of guard, and create the corresponding n-dimensional guard X >= AX + B
+    '''
+    pass
+
+
+init_interval_regex = re.compile("([a-zA-Z]+) *= *\[ *((?:\+|-)? *[[0-9]+(?:\.[0-9]*)?) *; *((?:\+|-)? *[[0-9]+(?:\.[0-9]*)?) *\] *")
+def parse_init_interval(eqs):
+    intervals = {}
+    for eq in eqs:
+        m = re.match(init_interval_regex, eq)
+        if not m:
+            raise Exception('Invalid initial interval syntax', eq)
+        intervals[m.group(1)] = Interval()
+        intervals[m.group(1)].fromInterval('+', m.group(2), m.group(3))
+    return intervals
+
+########################################################################
+
+parseFile('example.json')
+
     
 
 def guard_translator(input):
@@ -113,110 +165,3 @@ def update_translator(input):
         B = -B
     
     return update(A,B)
-    
-'''
-    Usefull classes. FIXME: Will be put in seperate file for final version
-'''
-    
-class automaton:
-    '''
-        The automaton class is a collection of nodes and links
-    '''
-    
-    def __init__(self):
-        self.nodes = {}
-        self.links = {}
-        self.init = ""
-        self.x_range = interval(0,0)
-        
-    def init_interval(inter):
-        self.x_range = inter
-    
-    def init_node(name):
-        self.init = name
-
-
-class link:
-    '''
-        Link class
-    '''
-    
-    def __init__(self, src, dst, guard, update):
-        self.dst = dst
-        self.src = src
-        self.guard = guard
-        self.update = update
-        
-    def take(self, X):
-        if self.guard.satisfied(X):
-            self.update.reset(X)
-            return dst
-        return src
-        
-
-class node:
-    '''
-        Automaton node
-    '''
-    
-    def __init__(self, equation, guard):
-        self.equation = equation
-        self.guard = guard
-
-
-class guard:
-    '''
-        Node or link guards
-        AX + B >=< 0
-        
-        S in ["<", ">", "=", "!=", ">=", "<="]
-    '''
-    
-    def __init__(self, A, B, S):
-        self.A = A
-        self.B = B
-        self.S = S
-        
-    def satisfied(self, X):
-        value = self.A * X + self.B
-        if S == "<":
-            return value < 0
-        if S == ">":
-            return value > 0
-        if S == "=":
-            return value == 0
-        if S == "!=":
-            return value != 0
-        if S == ">=":
-            return value >= 0
-        if S == "<=":
-            return value <= 0
-        print("Unrecognized value of S : " + self.S)
-        raise ValueError
-
-
-class equation:
-    '''
-        First order differential equation with noize
-        X. = AX + B + U(t)
-        U = max|U(t)|
-    '''
-    
-    def __init__(self, A, B, U):
-        self.B = B
-        self.A = A
-        self.U = U
-
-class update:
-    '''
-        Update class
-        X = AX + B
-    '''
-    
-    def __init__(self, A, B):
-        self.A = A
-        self.B = B
-        
-    
-    def reset(self, X):
-        return self.A*X + self.B

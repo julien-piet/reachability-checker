@@ -1,6 +1,10 @@
 {
     "nodes":{
         "Start": {
+            "eqs": [
+                "x' = 2x + [ 3; 9 ]",
+                "y' = 4x -2y ± 4"
+            ],
             "equation": "x_dot = 2x + 1 ± 0.5",
             "guard": "x - 3 < 0"
             },
@@ -25,7 +29,11 @@
         }
     ],
     
-    "init": { "interval" : "[0,1]", "node": "Start"}
+    "init": [
+        "x = [1; 2]",
+        "y = [-3; 2.5]"
+    ], 
 
+    "entry": "Start"
 }
             
