@@ -142,12 +142,32 @@ class polyhedra:
         rtn = None
         min_p = other.min_p
         max_p = other.max_p
+        inter_box = None
         for i in range(self.m):
+            # First, determine the coordinates of intersection points
+            points = []
             for p in other.points:
+                directions = [idx for idx, val in enumerate(p) if val==min_p[idx]]
+                for dir in directions:
+                    inter = lin_solver(self.A[i],self.B[i],np.array([0 if j != dir else 1 for j in range(len(p))]),p)
+                    if inter is not None and inter[dir] >= min_p[dir] and inter[dir] <= max_p[dir]:
+                        points.append(inter)
+            if len(points) == 0:
+                return None
+            # Add the corner that is deepest into the polyhedra
+            points.append(other.min_lin_solution(self.A[i]))
+            # Now that we have the intersection points, calculate englobing box
+            min_corner = [min([p[j] for p in range(points)]) for j in range(len(min_p))]
+            max_corner = [max([p[j] for p in range(points)]) for j in range(len(min_p))]
+            if not inter_box:
+                inter_box = box(min_corner, max_corner)
+            else:
+                inter_box = inter_box.intersect(box(min_corner, max_corner))
+            if inter_box is None:
+                return None
+        return inter_box
                 
                 
-        
-
 
 class box:
     '''
@@ -159,11 +179,14 @@ class box:
         self.max_p = np.array([max(a[i], b[i]) for i in range(len(a))])
         self.points = []
         for i in range(2**len(self.min_p)):
-            changes = [i & 2**j for j in range(len(self.min_p))]
+            changes = [(i & 2**j) / 2**j for j in range(len(self.min_p))]
             self.points.append(np.array([self.max_p[j] + changes[j]*(self.min_p[j] - self.max_p[j]) for j in range(len(self.min_p))]))
             
     def __str__(self):
-        return "[" + str(self.min_p) + "," + str(self.max_p) + "]"
+        rtn = "{"
+        for p in self.points:
+            rtn += str(p) + ";"
+        return rtn[:-1] + "}"
             
     def union(this, other):
         '''
@@ -183,33 +206,59 @@ class box:
         '''
             Returns a new instance of interval, given by the multiplication of its original value by f)
         '''
-        return box(np.dot(f, self.min_p), np.dot(f, self.max_p))
+
+        return box.build_from_points([np.dot(f, p) for p in self.points])
         
     def fuzz(self, delta):
         '''
             Modifies the interval by adding a fuzzing factor
         '''
-        self.min_p -= delta[0]
+        self.min_p += delta[0]
         self.max_p += delta[1]
+        self.points = []
+        for i in range(2**len(self.min_p)):
+            changes = [i & 2**j for j in range(len(self.min_p))]
+            self.points.append(np.array([self.max_p[j] + changes[j]*(self.min_p[j] - self.max_p[j]) for j in range(len(self.min_p))]))
+        
+    def build_from_points(points):
+        '''
+            Returns a box built from a list of points
+        '''
+        if len(points) == 0:
+            return None
+        min_corner = [min([p[j] for p in points]) for j in range(len(points[0]))]
+        max_corner = [max([p[j] for p in points]) for j in range(len(points[0]))]
+        return box(min_corner, max_corner)
+        
+    def min_lin_solution(self, vect):
+        '''
+            Returns a point that minimizes self dot vect
+        '''
+        return np.array([self.min_p[i] if vect[i] >= 0 else self.max_p[i] for i in range(len(vect))])
+
 
 class solver:
     '''
         Solver main class
         Equation :
             X' = AX + U(t)
-        A : scalar
-        U(t) : random noize (Max abs value U)
+        A : Square matrix
+        U(t) : random noize (Max value over all dimentions)
         
         initial value in interval x0
-        x0 positive (TBF)
+        x0 contains time values
         
         For n steps of duration d
     '''
     
-    def __init__(self, A, U, x0, n, d):
+    def __init__(self, A, u, x0, n, d):
         # User defined variables
         
-        self.A = A
+        self.dimention = len(A) + 1
+        self.A = np.zeros((self.dimention, self.dimention))
+        self.A[:-1,:-1] = A
+        
+        self.u = u
         self.n = n
         self.d = d
         
@@ -227,41 +276,38 @@ class solver:
         '''
             Run the algorithm and store reachabilities in array self.reach
         '''        
-        #Calculate beta, the bloating factor
-        #beta = self.U * ((expm(self.A * self.d) - 1) / det(self.A))
-        
+        #Calculate beta, the bloating factor. Over-approx for the moment
+        norme_A = np.linalg.norm(self.A)
+        val = ((np.exp(norme_A * self.d) - 1) / norme_A) * self.u
+        beta = [[-val for idx in range(self.dimention)], [val for idx in range(self.dimention)]]
+        beta[0][-1] = self.d
+        beta[-1][-1] = self.d
         current_step = 0
         for i in range(n):
-            self.iteration(current_step)
+            self.iteration(current_step, beta)
             current_step += 1
     
     
-    def iteration(self, current_step):
+    def iteration(self, current_step, beta):
         ''' 
             Calculate Reach for the next step
         '''
         d = self.d
-        print(expm(self.A))
         # First, calculate the next reach
-        self.reach[current_step+1] = self.reach[current_step].multiply(expm(self.d * self.A))
-        #self.reach[current_step+1].fuzz(beta)
+        self.reach[current_step+1] = self.reach[current_step].multiply(expm(d * self.A))
+        self.reach[current_step+1].fuzz(beta)
         
-        # Now, update range (optimize here - Uses zonotope)
+        # Now, update range (using boxes)
         t = current_step * d
         large_area = box.union(self.reach[current_step], self.reach[current_step+1])
-        self.range.append(box(np.append([t], large_area.min_p), np.append([t+d], large_area.max_p)))
+        self.range.append(large_area)
         
         
 A = np.array([[0,-1],[1,0]])
 U = 0
-x0 = box(np.array([0,0]), np.array([1,1]))
-d = 1
-n = 4
+x0 = box(np.array([1,0,0]), np.array([0,0,0]))
+d = 0.1
+n = 5
 
 crc = solver(A,U,x0,n,d)
 crc.run()
-
-print(A)
-print(x0)
-for b in crc.range:
-    print(b)
