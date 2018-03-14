@@ -4,59 +4,8 @@ import numpy as np
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 from scipy.spatial.qhull import QhullError
-class interval:
-    '''
-        representation of an interval
-        [a, b]
-    '''
-    
-    def __init__(self, a, b):
-        if a <= b:
-            self.a = a
-            self.b = b
-            self.void = False
-        else:
-            self.void = True
-            
-    def __str__(self):
-        return "[" + str(self.a) + "," + str(self.b) + "]"
-            
-    def union(this, other):
-        '''
-            returns the union of this interval and the other, and any space in between
-        '''
-        if other.void:
-            return interval(this.a, this.b)
-        if this.void:
-            return interval(other.a, other.b)
-        
-        return interval(min(this.a, other.a), max(this.b, other.b))
-    
-    def union_set(intervals):
-        '''
-            Returns the union of all given intervals. Non-destructive
-        '''
-        union = interval(intervals[0].a, intervals[0].b)
-        for elt in intervals[1:]:
-            union = interval.union(elt, union)
-        return union
-        
-    def multiply(self, f):
-        '''
-            Returns a new instance of interval, given by the multiplication of its original value by f)
-        '''
-        if f > 0:
-            return interval(self.a * f, self.b * f)
-        elif f < 0:
-            return interval(self.b * f, self.a * f)
-        return interval(0,0)
-        
-    def fuzz(self, delta):
-        '''
-            Modifies the interval by adding a fuzzing factor
-        '''
-        self.a = self.a - delta
-        self.b = self.b + delta
+from numpy.linalg.linalg import LinAlgError
+
 
 class guard:
     '''
@@ -76,6 +25,15 @@ class guard:
     
     def build_from_poly(poly):
         return guard(poly.A[0][0], poly.A[0][1], poly.B[0], "<")
+        
+    def __str__(self):
+        return " GUARD : " + str(self.a) + "t + " + str(self.b) + "x " + self.cmp + " " + str(self.c)
+        
+    def is_satisfied(self, poly):
+        '''
+            Returns true is poly intersects with guard
+        '''
+        return poly.intersect_guard(self) is not None
     
     
 class polygon:
@@ -84,6 +42,9 @@ class polygon:
     '''
     
     def __init__(self, points):
+        if len(points) < 2:
+            self.points = None
+            return
         try:
             convex_hull = ConvexHull(points)
             self.points = []
@@ -97,7 +58,7 @@ class polygon:
             self.points = [np.array(max_point), np.array(min_point)]
             
     
-    def intersect_guard(self, guard):
+    def intersect_guard(self, gd):
         '''
             Returns the intersection with a hyperplan
         '''
@@ -105,9 +66,9 @@ class polygon:
         for idx, val in enumerate(self.points):
             # Use matrix equation to solve intersection
             M = np.zeros((2,2))
-            M[0] = guard.A
+            M[0] = gd.A
             b = np.zeros(2)
-            b[0] = guard.B
+            b[0] = gd.c
             
             # Equation of the form ct + dx = e
             u = self.points[idx] - self.points[idx-1]
@@ -127,15 +88,15 @@ class polygon:
             # If we get here, check if solution is valid
             max_values = [max(self.points[idx-1][i], self.points[idx][i]) for i in range(2)]
             min_values = [min(self.points[idx-1][i], self.points[idx][i]) for i in range(2)]
-            if potential_solution[dir] >= min_values and  potential_solution[dir] <= max_values:
+            if all(potential_solution[i] >= min_values[i] and potential_solution[i] <= max_values[i] for i in range(2)):
                 inter_points.append(potential_solution)
-        if len(inter_points) == 0:
-            return None
         
-        if guard.cmp == "<":
-            inter_points += [value for value in self.points if np.dot(value, guard.A) <= guard.c]
-        elif guard.cmp == ">":
-            inter_points += [value for value in self.points if np.dot(value, guard.A) >= guard.c]
+        if gd.cmp == "<":
+            inter_points += [value for value in self.points if np.dot(value, gd.A) <= gd.c]
+        elif gd.cmp == ">":
+            inter_points += [value for value in self.points if np.dot(value, gd.A) >= gd.c]
+        if len(inter_points) < 2:
+            return None
         return polygon(inter_points)
         
     
@@ -185,21 +146,22 @@ class solver:
         initial value in interval x0
         x0 positive (TBF)
         
-        For n steps of duration d
+        For steps of duration d until guard is not satisfied OR time > T
     '''
     
-    def __init__(self, A, U, x0, n, d):
+    def __init__(self, A, U, x0, d, guard, T):
         # User defined variables
         
         self.A = A
         self.U = U
-        self.n = n
         self.d = d
+        self.guard = guard
+        self.T = T
         
         # Derived variables
         
-        self.T = d*n
-        self.reach = [0 for i in range(n+1)]
+        self.n = int(T / d)
+        self.reach = [0 for i in range(self.n+1)]
         self.reach[0] = x0
         
         #range will contain points of a convex enveloppe of solutions
@@ -214,9 +176,13 @@ class solver:
         beta = np.array([[self.d, self.U * ((np.exp(self.A * self.d) - 1) / self.A)],[self.d, -self.U * ((np.exp(self.A * self.d) - 1) / self.A)]])
 
         current_step = 0
-        for i in range(n):
+        for i in range(self.n):
             self.iteration(current_step, beta)
             current_step += 1
+            self.range[-1] = self.range[-1].intersect_guard(self.guard)
+            if self.range[-1] is None:
+                self.range.pop()
+                break
     
     
     def iteration(self, current_step, beta):
@@ -252,9 +218,11 @@ class solver:
 a = 1
 u = 0.1
 x0 = polygon([[0,2],[0,3]])
-delta = 0.1
-n = 100
-slv = solver(a,u,x0,n,delta)
+delta = 1
+T = 10
+gd = guard(1,0.005,5,"<")
+print(gd)
+slv = solver(a,u,x0,delta, gd, T)
 slv.run()
 print(slv.range)
 # Visualisation
