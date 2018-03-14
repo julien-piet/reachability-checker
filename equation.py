@@ -11,4 +11,7 @@ class Equation:
         
     def compute(self, t):
         pass
+        
+    def __str__(self):
+        return "V : " + str(self.V)  + "A : " + str(self.A)  + "B : " + str(self.B) 
 

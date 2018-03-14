@@ -1,4 +1,5 @@
 # Reachability calculation for linear first order differential equations
+### ADAPT to automaton and parser structure
 
 import numpy as np
 from scipy.spatial import ConvexHull
@@ -22,6 +23,9 @@ class guard:
         self.cmp = cmp
         
         self.A = np.array([a,b])
+    
+    def intersect(self, zone):
+        return zone.intersect_guard(self)
     
     def build_from_poly(poly):
         return guard(poly.A[0][0], poly.A[0][1], poly.B[0], "<")
@@ -173,7 +177,7 @@ class solver:
             Run the algorithm and store reachabilities in array self.reach
         '''        
         #Calculate beta, the bloating factor
-        beta = np.array([[self.d, self.U * ((np.exp(self.A * self.d) - 1) / self.A)],[self.d, -self.U * ((np.exp(self.A * self.d) - 1) / self.A)]])
+        beta = np.array([[self.d, self.U[0] * ((np.exp(self.A * self.d) - 1) / self.A)],[self.d, self.U[1] * ((np.exp(self.A * self.d) - 1) / self.A)]])
 
         current_step = 0
         for i in range(self.n):
@@ -216,7 +220,7 @@ class solver:
         
         
 a = 1
-u = 0.1
+u = [1,1.1]
 x0 = polygon([[0,2],[0,3]])
 delta = 1
 T = 10
