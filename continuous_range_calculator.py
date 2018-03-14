@@ -173,7 +173,7 @@ class solver:
             Run the algorithm and store reachabilities in array self.reach
         '''        
         #Calculate beta, the bloating factor
-        beta = np.array([[self.d, self.U * ((np.exp(self.A * self.d) - 1) / self.A)],[self.d, -self.U * ((np.exp(self.A * self.d) - 1) / self.A)]])
+        beta = np.array([[self.d, self.U[0] * ((np.exp(self.A * self.d) - 1) / self.A)],[self.d, self.U[1] * ((np.exp(self.A * self.d) - 1) / self.A)]])
 
         current_step = 0
         for i in range(self.n):
@@ -216,7 +216,7 @@ class solver:
         
         
 a = 1
-u = 0.1
+u = [1,1.1]
 x0 = polygon([[0,2],[0,3]])
 delta = 1
 T = 10

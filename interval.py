@@ -22,7 +22,7 @@ class Interval:
         return [self.a, self.b]
 
     def __str__(self):
-        return '[' + self.a + ';' + self.b + ']'
+        return '[' + str(self.a) + ';' + str(self.b) + ']'
 
     def __repr__(self):
-        return '[' + self.a + ';' + self.b + ']'
+        return '[' + str(self.a) + ';' + str(self.b) + ']'
