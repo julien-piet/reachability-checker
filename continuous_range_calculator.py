@@ -1,4 +1,5 @@
 # Reachability calculation for linear first order differential equations
+### ADAPT to automaton and parser structure
 
 import numpy as np
 from scipy.spatial import ConvexHull
@@ -22,6 +23,9 @@ class guard:
         self.cmp = cmp
         
         self.A = np.array([a,b])
+    
+    def intersect(self, zone):
+        return zone.intersect_guard(self)
     
     def build_from_poly(poly):
         return guard(poly.A[0][0], poly.A[0][1], poly.B[0], "<")

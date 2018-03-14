@@ -1,5 +1,6 @@
 '''
     parser.py - Parse a json to create an automaton object.
+    TODO : Tranform to assign each variable to a dimention, and tranform all objects in accordance
 '''
 import json
 import re
@@ -11,7 +12,7 @@ from equation import Equation
 from update import Update
 from guard import Guard
 
-def parseFile(filename):
+def parseFile(filename, setR, guardR, updateR):
     '''
        Parse a json file to generate an automaton
        For syntax, see example.json
@@ -19,25 +20,26 @@ def parseFile(filename):
 
     data = json.load(open(filename))
     auto = am.Automaton()
+    auto.set_representation(setR, guardR, updateR)
 
     for name in data['nodes']:
         node = am.Node(auto, name)
         if 'eqs' in data['nodes'][name]:
             node.set_equation(parse_system(data['nodes'][name]['eqs']))
         if 'guard' in data['nodes'][name]:
-            node.set_guard(parse_guard_system(data['nodes'][name]['guard']))
+            node.set_guard(parse_guard_system(data['nodes'][name]['guard'], guardR))
 
     for link in data['links']:
         src = auto.nodes[link['src']]
         dst = auto.nodes[link['dst']]
         link_obj = am.Link(auto, src, dst)
         if 'update' in link:
-            link_obj.set_update(parse_update_system(link['update']))
+            link_obj.set_update(parse_update_system(link['update'], updateR))
         if 'guard' in data['nodes'][name]:
-            link_obj.set_guard(parse_guard_system(link['guard']))
+            link_obj.set_guard(parse_guard_system(link['guard'], guardR))
         
 
-    auto.set_init_interval(parse_init_interval(data['init']))
+    auto.set_init_interval(parse_init_interval(data['init'], setR))
     auto.set_init_node(data['entry'])
 
     return auto
@@ -104,7 +106,7 @@ def parse_equation(eq):
     return {'var': var_name, 'params': params, 'error': error}
 
 
-def parse_update_system(eqs):
+def parse_update_system(eqs, updateR):
     '''
         Parse and array of update, and create the corresponding n-dimensional guard X = AX + B
     '''
@@ -129,7 +131,7 @@ def parse_update_system(eqs):
         system_mat.append(eq_line)
         system_offset.append(system[v]['offset'])
 
-    return Update(np.transpose(np.array(system_vars)), np.array(system_mat), np.array(system_offset))
+    return updateR(np.transpose(np.array(system_vars)), np.array(system_mat), np.array(system_offset))
     
 
 def parse_update(eq):
@@ -156,7 +158,7 @@ def parse_update(eq):
     return {'var': var_name, 'params': params, 'offset': offset}
 
 
-def parse_guard_system(eqs):
+def parse_guard_system(eqs, guardR):
     '''
         Parse and array of guard, and create the corresponding n-dimensional guard AX + B cmp 0
     '''
@@ -180,7 +182,7 @@ def parse_guard_system(eqs):
         system_offset.append(v['offset'])
         system_cmp.append(v['cmp'])
 
-    return Guard(np.transpose(np.array(system_vars)), np.array(system_mat), np.array(system_offset), np.array(system_cmp))
+    return guardR(np.transpose(np.array(system_vars)), np.array(system_mat), np.array(system_offset), np.array(system_cmp))
     
 comparator_regex = re.compile("(<|>|=)")
 guard_offset_regex = re.compile("([+-] *[0-9]+) *(<|>|=)")
@@ -210,7 +212,7 @@ def parse_guard(eq):
 
 
 init_interval_regex = re.compile("([a-zA-Z]+) *= *\[ *((?:\+|-)? *[[0-9]+(?:\.[0-9]*)?) *; *((?:\+|-)? *[[0-9]+(?:\.[0-9]*)?) *\] *")
-def parse_init_interval(eqs):
+def parse_init_interval(eqs, setR):
     intervals = {}
     for eq in eqs:
         m = re.match(init_interval_regex, eq)
@@ -222,4 +224,4 @@ def parse_init_interval(eqs):
 
 ################################################################################
 
-parseFile('example.json')
+parseFile('example.json', Interval, Guard, Update)
