@@ -1,22 +1,46 @@
+import numpy as np
+import matplotlib.pyplot as plt
 from scipy.linalg import expm
 from numpy.linalg import norm
-import numpy as np
-from zonotope import Zonotope
 
-import matplotlib.pyplot as plt
+from ..generics.equation import Equation
+from ..generics.guard    import Guard
+from ..generics.update   import Update
+from .zonotope           import Zonotope
 
-class ReachabilityZono:
+class Solver:
 
-    def __init__(self, A, I, r, mu, m, debug=True):
+    @staticmethod
+    def get_set_type():
+        return Zonotope
+
+    @staticmethod
+    def get_equation_type():
+        return Equation
+
+    @staticmethod
+    def get_guard_type():
+        return Guard
+
+    @staticmethod
+    def get_update_type():
+        return Update
+
+
+    def __init__(self, r, m, debug=True):
         self.debug = debug
+        self.r = r
+        self.m = m
 
+    def solve(self, eq, init, guards):
+        pass
+
+    def set_params(self, A, I, mu):
         self.A = np.array(A)
         self.n = self.A.shape[0]
         self.I = I
-        self.r = r
         self.mu = mu
-        self.m = m
-        if debug:
+        if self.debug:
             print("---------------------")
             print("A =\n", self.A)
             print("I =\n", self.I)
@@ -26,21 +50,21 @@ class ReachabilityZono:
         
         self.erA = expm(self.A * self.r)
         self.nA = norm(self.A, np.inf)
-        if debug:
+        if self.debug:
             print("---------------------")
             print("exp(rA) =\n", self.erA)
             print("||A|| =", self.nA)
         
         self.betaR = (np.exp(self.r * self.nA)-1)/self.nA * self.mu
         self.alphaR = (np.exp(self.r * self.nA) - 1 - self.r*self.nA) * self.I.supNorm()
-        if debug:
+        if self.debug:
             print("---------------------")
             print("betaR =", self.betaR)
             print("alphaR =", self.alphaR)
 
         self.abBall = Zonotope.ball(self.n, np.zeros(self.n), self.alphaR + self.betaR)
         self.bBall  = Zonotope.ball(self.n, np.zeros(self.n), self.betaR)
-        if debug:
+        if self.debug:
             print("---------------------")
             print("ball(alphaR + betaR) =\n", self.abBall)
             print("ball(betaR) =\n", self.bBall)
@@ -49,7 +73,7 @@ class ReachabilityZono:
         self.Q = self.P + self.abBall
         self.stepno = 0
         self.t = 0
-        if debug:
+        if self.debug:
             print("---------------------")
             print("Step", self.stepno, "(t =", self.t, ")")
             print("P =\n", self.P)
@@ -70,13 +94,13 @@ class ReachabilityZono:
 
 
 
-I = Zonotope(2, [1.0, 0.0], [[0.1, 0.0], [0.0, -0.1]])
-A = [[-1, -4], [4, -1]]
+# I = Zonotope(2, [1.0, 0.0], [[0.1, 0.0], [0.0, -0.1]])
+# A = [[-1, -4], [4, -1]]
 
-RZ = ReachabilityZono(A, I, 0.02, 0.05, 7)
+# RZ = ReachabilityZono(A, I, 0.02, 0.05, 7)
 
-for i in range(100):
-    RZ.Q.plot(plt)
-    RZ.step()
+# for i in range(100):
+    # RZ.Q.plot(plt)
+    # RZ.step()
 
-plt.show()
+# plt.show()

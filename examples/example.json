@@ -1,4 +1,6 @@
 {
+    "vars": [ "x", "y" ],
+
     "nodes":{
         "Start": {
             "eqs": [

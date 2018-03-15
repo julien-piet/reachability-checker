@@ -1,13 +1,15 @@
 # Automaton main class
 
 import numpy as np
-from equation import Equation
+from .equation import Equation
 
 class Automaton:
+
     def __init__(self):
         self.nodes = {}
-        self.init = ""
-        self.x_range = None
+        self.init_node = None
+        self.init_value = None
+        self.vars = []
          
         self.solver = None
         self.range = None
@@ -20,7 +22,13 @@ class Automaton:
         self.N = None
 
     def set_init_interval(self, inter):
-        self.x_range = inter
+        self.init_value = inter
+
+    def set_variables(self, variables):
+        self.variables = variables
+        
+    def set_init_node(self, node_name):
+        self.init = self.nodes[node_name]
         
     def set_solver(self, solv):
         self.solver = solv
@@ -30,9 +38,6 @@ class Automaton:
         self.d = d
         self.N = N
 
-    def set_init_node(self, node_name):
-        self.init = self.nodes[node_name]
-        
     def __str__(self):
         rtn = " Automaton : \n"
         for name in self.nodes:
@@ -40,60 +45,60 @@ class Automaton:
         rtn += " Init : " + str(self.init)
         return rtn
         
-    def step():
-        '''
-            Explores current set of nodes
-        '''
-        if self.T is None:
-            print("You need to define serach bounds")
-            return
-        if self.solver is None:
-            print("You need to define a solver")
-            return
+    # def step():
+        # '''
+            # Explores current set of nodes
+        # '''
+        # if self.T is None:
+            # print("You need to define serach bounds")
+            # return
+        # if self.solver is None:
+            # print("You need to define a solver")
+            # return
             
-        if self.range is None:
-            self.explored = []
-            self.toExplore = [(self.init,self.x_range, 0)]
-            self.range = {}
+        # if self.range is None:
+            # self.explored = []
+            # self.toExplore = [(self.init,self.x_range, 0)]
+            # self.range = {}
             
-        current_set = self.toExplore[:]
-        self.toExplore = []
+        # current_set = self.toExplore[:]
+        # self.toExplore = []
         
-        for val in current_set:
+        # for val in current_set:
             
-            if val[2] > N:
-                continue
-            # Explore this node
-            solv = self.solver(self.nodes[val[0]], val[1], T, d)
-            solv.run()
-            if not solv.range:
-                continue
+            # if val[2] > N:
+                # continue
+            # # Explore this node
+            # solv = self.solver(self.nodes[val[0]], val[1], T, d)
+            # solv.run()
+            # if not solv.range:
+                # continue
                 
-            #We have a solution
-            if not val[0] in self.explored:
-                self.explored.append(val[0])
-            if val[0] in self.range:
-                self.range[val[0]] += solv.range
-            else:
-                self.range[val[0]] = solv.range
+            # #We have a solution
+            # if not val[0] in self.explored:
+                # self.explored.append(val[0])
+            # if val[0] in self.range:
+                # self.range[val[0]] += solv.range
+            # else:
+                # self.range[val[0]] = solv.range
                 
-            #Intersect with guards
-            start = []
-            for set in solv.range:
-                for l in self.nodes[val[0]].links:
-                    new_zone = l.intersect_guard(set)
-                    if not new_zone:
-                        continue
-                    new_zone = l.update(new_zone)
-                    if l.end in starts:
-                        starts[l.end].append(new_zone)
-                    else:
-                        starts[l.end] = [new_zone]
+            # #Intersect with guards
+            # start = []
+            # for set in solv.range:
+                # for l in self.nodes[val[0]].links:
+                    # new_zone = l.intersect_guard(set)
+                    # if not new_zone:
+                        # continue
+                    # new_zone = l.update(new_zone)
+                    # if l.end in starts:
+                        # starts[l.end].append(new_zone)
+                    # else:
+                        # starts[l.end] = [new_zone]
             
-            #Setup exploration for next iteration
-            for nd in starts:
-                for zone in starts[nd]:
-                    self.toExplore.append((nd, zone, val[2]+1))
+            # #Setup exploration for next iteration
+            # for nd in starts:
+                # for zone in starts[nd]:
+                    # self.toExplore.append((nd, zone, val[2]+1))
                     
 
 class Link:

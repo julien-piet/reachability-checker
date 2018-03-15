@@ -2,12 +2,28 @@ import numpy as np
 from scipy.spatial import ConvexHull
 from numpy.linalg import norm
 
-def basisVect(n, i):
+def basisVect(n, i, val=1.0):
     v = np.zeros(n)
-    v[i] = 1.0
+    v[i] = val
     return v
 
 class Zonotope:
+
+    @staticmethod
+    def ball(n, c, r):
+        assert c.shape[0] == n, "Invalid dimension beetween provided n and C (in ball)"
+        gens = [r * basisVect(n, i) for i in range(0, n)]
+        return Zonotope(n, c, gens)
+
+    @staticmethod
+    def fromIntervals(I):
+        n = len(I)
+        c = np.zeros(n)
+        gens = []
+        for i, interval in enumerate(I):
+            c[i] = (interval[0] + interval[1]) * 0.5
+            gens.append(basisVect(n, i, (interval[1] - interval[0]) * 0.5))
+        return Zonotope(n, c, gens)
 
     def __init__(self, n, c=None, gens=[]):
         self.n = n 
@@ -22,12 +38,6 @@ class Zonotope:
         gens2 = [(np.eye(self.n) - erA).dot(gi) * 0.5 for gi in self.gens]
         return Zonotope(self.n, c, gens1 + gens2)
         
-    @staticmethod
-    def ball(n, c, r):
-        assert c.shape[0] == n, "Invalid dimension beetween provided n and C (in ball)"
-        gens = [r * basisVect(n, i) for i in range(0, n)]
-        return Zonotope(n, c, gens)
-
     def __add__(self, Z):
         assert Z.n == self.n, "Invalid dimension beetween Z1 and Z2 (in add)"
         c = self.c + Z.c

@@ -1,83 +1,83 @@
 '''
     parser.py - Parse a json to create an automaton object.
-    TODO : Tranform to assign each variable to a dimention, and tranform all objects in accordance
 '''
 import json
 import re
 import numpy as np
 
-import automaton as am
-from interval import Interval
-from equation import Equation
-from update import Update
-from guard import Guard
+from . import automaton as am
+from .interval import Interval
 
-def parseFile(filename, setR, guardR, updateR):
+
+def parse_file(filename, eq_type, set_type, guard_type, update_type):
     '''
        Parse a json file to generate an automaton
-       For syntax, see example.json
+       For syntax, see the README 
+    '''
+    text = open(filename)
+    return parse(text, eq_type, set_type, guard_type, update_type)
+
+
+def parse(text, eq_type, set_type, guard_type, update_type):
+    '''
+        Same as parse_file, but directly takes file content
     '''
 
-    data = json.load(open(filename))
+    data = json.load(text)
     auto = am.Automaton()
-    auto.set_representation(setR, guardR, updateR)
+
+    auto.set_variables(data['vars'])
+    auto.set_init_interval(parse_init_interval(data['init'], data['vars'], set_type))
 
     for name in data['nodes']:
         node = am.Node(auto, name)
         if 'eqs' in data['nodes'][name]:
-            node.set_equation(parse_system(data['nodes'][name]['eqs']))
+            node.set_equation(parse_system(data['nodes'][name]['eqs'], data['vars'], eq_type))
         if 'guard' in data['nodes'][name]:
-            node.set_guard(parse_guard_system(data['nodes'][name]['guard'], guardR))
+            node.set_guard(parse_guard_system(data['nodes'][name]['guard'], data['vars'], guard_type))
 
     for link in data['links']:
         src = auto.nodes[link['src']]
         dst = auto.nodes[link['dst']]
         link_obj = am.Link(auto, src, dst)
         if 'update' in link:
-            link_obj.set_update(parse_update_system(link['update'], updateR))
+            link_obj.set_update(parse_update_system(link['update'], data['vars'], update_type))
         if 'guard' in data['nodes'][name]:
-            link_obj.set_guard(parse_guard_system(link['guard'], guardR))
+            link_obj.set_guard(parse_guard_system(link['guard'], data['vars'], guard_type))
         
 
-    auto.set_init_interval(parse_init_interval(data['init'], setR))
     auto.set_init_node(data['entry'])
 
     return auto
 
+def get_var(variables, v):
+    try:
+        i = variables.index(v)
+        return i
+    except ValueError:
+        raise Exception("Undeclared variable in equation: " + v)
+
+###############################################################################
 
 eq_name_regex = re.compile("([a-zA-Z]+)' *= *")
 eq_params_regex = re.compile("((?:\+|-)? *[0-9]+(?:\.[0-9]*)?) *([a-zA-Z]+)")
 eq_bias_regex = re.compile("(?:(±) *([0-9]+(?:\.[0-9]*)?))|(?:(\+|-) *\[ *((?:\+|-)?[0-9]+(?:\.[0-9]*)?) *; *((?:\+|-)?[0-9]+(?:\.[0-9]*)?) *\])")
 
-update_name_regex = re.compile("([a-zA-Z]+) *= *")
-update_offset_regex = re.compile("([+-] *[0-9]+) *$")
-
-def parse_system(eqs):
+def parse_system(eqs, variables, eq_type):
     '''
         Parse an array of lin dif eq, and create the corresponding n-dimensional equation X' = AX + O(E)
     '''
-    system_vars, system = [], {}
+    A = np.zeros((len(variables), len(variables)))
+    B = np.array([[0, 0] for i in range(len(variables))])
     for eq in eqs:
         e = parse_equation(eq)
-        if e['var'] not in system_vars:
-            system_vars.append(e['var'])
-        for v in e['params']:
-            if v not in system_vars:
-                system_vars.append(v)
-        system[e['var']] = e
+        i = get_var(variables, e['var'])
+        for p in e['params']:
+            j = get_var(variables, p)
+            A[i][j] = e['params'][p]
+        B[i] = e['error'].toList()
 
-    system_mat, system_error = [], []
-    for v in system_vars:
-        eq_line = []
-        for p in system_vars:
-            if p in system[v]['params']:
-                eq_line.append(system[v]['params'][p])
-            else:
-                eq_line.append(0)
-        system_mat.append(eq_line)
-        system_error.append(system[v]['error'].toList())
-
-    return Equation(np.transpose(np.array(system_vars)), np.array(system_mat), np.array(system_error))
+    return eq_type.fromSystem(A, B)
 
 def parse_equation(eq):
     '''
@@ -105,33 +105,26 @@ def parse_equation(eq):
     
     return {'var': var_name, 'params': params, 'error': error}
 
+###############################################################################
 
-def parse_update_system(eqs, updateR):
+update_name_regex = re.compile("([a-zA-Z]+) *= *")
+update_offset_regex = re.compile("([+-] *[0-9]+) *$")
+
+def parse_update_system(eqs, variables, update_type):
     '''
         Parse and array of update, and create the corresponding n-dimensional guard X = AX + B
     '''
-    system_vars, system = [], {}
+    A = np.zeros((len(variables), len(variables)))
+    B = np.array([0 for i in range(len(variables))])
     for eq in eqs:
-        e = parse_update(eq)
-        if e['var'] not in system_vars:
-            system_vars.append(e['var'])
-        for v in e['params']:
-            if v not in system_vars:
-                system_vars.append(v)
-        system[e['var']] = e
+        u = parse_update(eq)
+        i = get_var(variables, u['var'])
+        for p in u['params']:
+            j = get_var(variables, p)
+            A[i][j] = u['params'][p]
+        B[i] = u['offset']
 
-    system_mat, system_offset = [], []
-    for v in system_vars:
-        eq_line = []
-        for p in system_vars:
-            if p in system[v]['params']:
-                eq_line.append(system[v]['params'][p])
-            else:
-                eq_line.append(0)
-        system_mat.append(eq_line)
-        system_offset.append(system[v]['offset'])
-
-    return updateR(np.transpose(np.array(system_vars)), np.array(system_mat), np.array(system_offset))
+    return update_type.fromSystem(A, B)
     
 
 def parse_update(eq):
@@ -157,32 +150,24 @@ def parse_update(eq):
     
     return {'var': var_name, 'params': params, 'offset': offset}
 
+###############################################################################
 
-def parse_guard_system(eqs, guardR):
+def parse_guard_system(eqs, variables, guard_type):
     '''
         Parse and array of guard, and create the corresponding n-dimensional guard AX + B cmp 0
     '''
-    system_vars, system = [], []
+    A, B, C = [], [], []
     for eq in eqs:
-        e = parse_guard(eq)
-        for v in e['params']:
-            if v not in system_vars:
-                system_vars.append(v)
-        system.append(e)
+        g = parse_guard(eq)
+        AA = np.zeros(len(variables))
+        for p in g['params']:
+            j = get_var(variables, p)
+            AA[j] = g['params'][p]
+        A.append(AA)
+        B.append(g['offset'])
+        C.append(g['comp'])
 
-    system_mat, system_offset, system_cmp = [], [], []
-    for v in system:
-        eq_line = []
-        for p in system_vars:
-            if p in v['params']:
-                eq_line.append(v['params'][p])
-            else:
-                eq_line.append(0)
-        system_mat.append(eq_line)
-        system_offset.append(v['offset'])
-        system_cmp.append(v['cmp'])
-
-    return guardR(np.transpose(np.array(system_vars)), np.array(system_mat), np.array(system_offset), np.array(system_cmp))
+    return guard_type.fromSystem(A, B, C)
     
 comparator_regex = re.compile("(<|>|=)")
 guard_offset_regex = re.compile("([+-] *[0-9]+) *(<|>|=)")
@@ -195,7 +180,7 @@ def parse_guard(eq):
     m = re.search(comparator_regex, eq)
     if not m:
         raise Exception('Invalid guard syntax', eq)
-    cmp = m.group(1)
+    comp = m.group(1)
 
     # Then determine linear parameters
     params = {}
@@ -208,20 +193,23 @@ def parse_guard(eq):
     if m:
         offset = float(m.group(1).replace(' ',''))  
     
-    return {'cmp': cmp, 'params': params, 'offset': offset }
+    return {'comp': comp, 'params': params, 'offset': offset }
 
+###############################################################################
 
 init_interval_regex = re.compile("([a-zA-Z]+) *= *\[ *((?:\+|-)? *[[0-9]+(?:\.[0-9]*)?) *; *((?:\+|-)? *[[0-9]+(?:\.[0-9]*)?) *\] *")
-def parse_init_interval(eqs, setR):
-    intervals = {}
+
+def parse_init_interval(eqs, variables, set_type):
+    I = np.zeros((len(variables), 2))
     for eq in eqs:
         m = re.match(init_interval_regex, eq)
         if not m:
             raise Exception('Invalid initial interval syntax', eq)
-        intervals[m.group(1)] = Interval()
-        intervals[m.group(1)].fromInterval('+', m.group(2), m.group(3))
-    return intervals
+        i = get_var(variables, m.group(1))
+        intv = Interval()
+        intv.fromInterval('+', m.group(2), m.group(3))
+        I[i][0] = intv.a
+        I[i][1] = intv.b
 
-################################################################################
+    return set_type.fromIntervals(I)
 
-parseFile('example.json', Interval, Guard, Update)
