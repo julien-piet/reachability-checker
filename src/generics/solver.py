@@ -1,3 +1,5 @@
+from .transition import Transition
+
 class Solver:
     '''
         Interface for an automaton solver.
@@ -5,10 +7,9 @@ class Solver:
         Parameters:
             - eq: equation to solve, of type given by get_equation_type()
             - init: set of initial values, of type given by get_set_type()
-            - guards: array of possible guards, of type given by get_guard_type()
+            - links: array of possible links, with link.guard of type given by get_guard_type()
         Returns:
-            - set of initial values for next state
-            - index of the guard taken
+            - a list of Transitions
     '''
 
     def solve(self, eq, init, guards):

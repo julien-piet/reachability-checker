@@ -28,7 +28,7 @@ class Automaton:
         self.variables = variables
         
     def set_init_node(self, node_name):
-        self.init = self.nodes[node_name]
+        self.init_node = self.nodes[node_name]
         
     def set_solver(self, solv):
         self.solver = solv
@@ -42,7 +42,7 @@ class Automaton:
         rtn = " Automaton : \n"
         for name in self.nodes:
             rtn += str(self.nodes[name])
-        rtn += " Init : " + str(self.init)
+        rtn += " Init : " + str(self.init_node)
         return rtn
         
     # def step():
@@ -142,7 +142,7 @@ class Node:
 
     def set_guard(self, guard):
         self.guard = guard
-        
+
     def __str__(self):
         rtn = " Node " + self.name + "\n"
         rtn += str(self.equation) + "\n"

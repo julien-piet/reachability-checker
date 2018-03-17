@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial import ConvexHull
 from numpy.linalg import norm
+import matplotlib.pyplot as plt
 
 def basisVect(n, i, val=1.0):
     v = np.zeros(n)
@@ -33,10 +34,11 @@ class Zonotope:
 
     def computeP(self, erA):
         assert erA.shape[0] == self.n, "Invalid dimension beetween I and erA (in P)"
-        c = (np.eye(self.n) + erA).dot(self.c) * 0.5
-        gens1 = [(np.eye(self.n) + erA).dot(gi) * 0.5 for gi in self.gens]
-        gens2 = [(np.eye(self.n) - erA).dot(gi) * 0.5 for gi in self.gens]
-        return Zonotope(self.n, c, gens1 + gens2)
+        c1 = (self.c + erA.dot(self.c)) / 2
+        c2 = (self.c - erA.dot(self.c)) / 2
+        gens1 = [(g + erA.dot(g)) / 2 for g in self.gens]
+        gens2 = [(g - erA.dot(g)) / 2 for g in self.gens]
+        return Zonotope(self.n, c1, gens1 + [c2] + gens2)
         
     def __add__(self, Z):
         assert Z.n == self.n, "Invalid dimension beetween Z1 and Z2 (in add)"
@@ -51,23 +53,21 @@ class Zonotope:
         return Zonotope(self.n, c, gens)
 
     def reduce(self, m):
-        if len(self.gens) <= m*self.n:
-            return
+        while len(self.gens) > m*self.n:
+            h, h2 = self.heuristicNormDiff(), []
+            assert len(h) == 2*self.n, "Heuristic raised invalid reducable generator list, must be of size 2*n"
 
-        h, h2 = self.heuristicNormDiff(), []
-        assert len(h) == 2*self.n, "Heuristic raised invalid reducable generator list, must be of size 2*n"
+            for j in range(self.n):
+                s = 0
+                for i in range(2*self.n):
+                    s += np.abs(self.gens[h[i]][j])
+                h2.append(np.array([(s if i == j else 0) for i in range(self.n)]))
 
-        for j in range(self.n):
-            s = 0
-            for i in range(2*self.n):
-                s += np.abs(self.gens[h[i]][j])
-            h2.append([(s if i == j else 0) for i in range(self.n)])
+            for j in range(self.n):
+                self.gens[h[j]] = h2[j]
 
-        for j in range(self.n):
-            self.gens[h[j]] = h2[j]
-
-        for j in range(self.n):
-            del self.gens[h[self.n+j]]
+            for j in range(self.n):
+                del self.gens[h[self.n+j]]
 
     def heuristicNormDiff(self):
         norms = [norm(g, 1) - norm(g, np.inf) for g in self.gens]
@@ -89,13 +89,15 @@ class Zonotope:
             self.points.append(point)
         return self.points
 
-    def plot(self, plt):
+    def plot(self, c):
         points = self.getPoints() 
         hull = ConvexHull(points)
         x, y = [points[i][0] for i in hull.vertices], [points[i][1] for i in hull.vertices]
         x.append(points[hull.vertices[0]][0])
         y.append(points[hull.vertices[0]][1])
-        plt.plot(x, y)
+        plt.plot(x, y, c=c)
+        plt.draw()
+        plt.pause(0.001)
 
     def supNorm(self):
         points = self.getPoints()
@@ -104,3 +106,24 @@ class Zonotope:
             n = norm(p, np.inf)
             if n > s: s = n
         return s
+
+    def is_intersecting(self, guard):
+        for c in guard.C:
+            assert c=='=', "Can't use zonotope on inequality guards. Only equality guards are supported"
+            
+        v = guard.B - guard.A.dot(self.c)
+        ns, ps = np.zeros(guard.A.shape[0]), np.zeros(guard.A.shape[0])
+        for g in self.gens:
+            x = guard.A.dot(g)
+            ps = ps + x
+            ns = ns - x
+
+        for i in range(guard.A.shape[0]):
+            if x[i] > ps[i]:
+                return False
+            if x[i] < ns[i]:
+                return False
+
+        return True
+
+

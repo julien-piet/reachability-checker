@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 from scipy.linalg import expm
 from numpy.linalg import norm
 
-from ..generics.equation import Equation
-from ..generics.guard    import Guard
-from ..generics.update   import Update
-from .zonotope           import Zonotope
+from ..generics.guard      import Guard
+from ..generics.update     import Update
+from ..generics.transition import Transition
+from .equation             import Equation
+from .zonotope             import Zonotope
 
 class Solver:
 
@@ -32,13 +33,22 @@ class Solver:
         self.r = r
         self.m = m
 
-    def solve(self, eq, init, guards):
-        pass
+    def solve(self, eq, init, links, T, c):
+        self.set_params(eq.A, init, eq.mu)
+        trs = []
+        while self.t < T:
+            self.step()
+            self.Q.plot(c)
+            for l in links:
+                if self.Q.is_intersecting(l.guard):
+                    trs.append(Transition(l, self.Q))
+        return trs
 
     def set_params(self, A, I, mu):
         self.A = np.array(A)
         self.n = self.A.shape[0]
         self.I = I
+        self.I.plot(c="black")
         self.mu = mu
         if self.debug:
             print("---------------------")
@@ -48,7 +58,7 @@ class Solver:
             print("mu =", self.mu)
             print("m =", self.m)
         
-        self.erA = expm(self.A * self.r)
+        self.erA = expm(self.r * self.A)
         self.nA = norm(self.A, np.inf)
         if self.debug:
             print("---------------------")
@@ -70,6 +80,7 @@ class Solver:
             print("ball(betaR) =\n", self.bBall)
 
         self.P = I.computeP(self.erA)
+        self.P.plot(c="red")
         self.Q = self.P + self.abBall
         self.stepno = 0
         self.t = 0

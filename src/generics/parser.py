@@ -42,7 +42,7 @@ def parse(text, eq_type, set_type, guard_type, update_type):
         link_obj = am.Link(auto, src, dst)
         if 'update' in link:
             link_obj.set_update(parse_update_system(link['update'], data['vars'], update_type))
-        if 'guard' in data['nodes'][name]:
+        if 'guard' in link:
             link_obj.set_guard(parse_guard_system(link['guard'], data['vars'], guard_type))
         
 
@@ -60,7 +60,7 @@ def get_var(variables, v):
 ###############################################################################
 
 eq_name_regex = re.compile("([a-zA-Z]+)' *= *")
-eq_params_regex = re.compile("((?:\+|-)? *[0-9]+(?:\.[0-9]*)?) *([a-zA-Z]+)")
+eq_params_regex = re.compile("((?:\+|-)? *[0-9]+(?:\.[0-9]*)?)? *([a-zA-Z]+)")
 eq_bias_regex = re.compile("(?:(±) *([0-9]+(?:\.[0-9]*)?))|(?:(\+|-) *\[ *((?:\+|-)?[0-9]+(?:\.[0-9]*)?) *; *((?:\+|-)?[0-9]+(?:\.[0-9]*)?) *\])")
 
 def parse_system(eqs, variables, eq_type):
@@ -92,7 +92,8 @@ def parse_equation(eq):
     # Then determine linear parameters
     params = {}
     for mm in re.finditer(eq_params_regex, eq):
-        params[mm.group(2)] = float(mm.group(1).replace(' ', ''))
+        i = float(mm.group(1).replace(' ', '')) if not mm.group(1) is None else 1.0
+        params[mm.group(2)] = i
 
     # Finally, find error
     error = Interval()
@@ -108,7 +109,7 @@ def parse_equation(eq):
 ###############################################################################
 
 update_name_regex = re.compile("([a-zA-Z]+) *= *")
-update_offset_regex = re.compile("([+-] *[0-9]+) *$")
+update_offset_regex = re.compile("([+-] *[0-9]+(?:\.[0-9]*)?) *$")
 
 def parse_update_system(eqs, variables, update_type):
     '''
@@ -140,7 +141,8 @@ def parse_update(eq):
     # Then determine linear parameters
     params = {}
     for mm in re.finditer(eq_params_regex, eq):
-        params[mm.group(2)] = float(mm.group(1).replace(' ', ''))
+        i = float(mm.group(1).replace(' ', '')) if not mm.group(1) is None else 1.0
+        params[mm.group(2)] = i
 
     # Finally, find offset
     offset = 0
@@ -167,10 +169,10 @@ def parse_guard_system(eqs, variables, guard_type):
         B.append(g['offset'])
         C.append(g['comp'])
 
-    return guard_type.fromSystem(A, B, C)
+    return guard_type.fromSystem(np.array(A), np.array(B), np.array(C))
     
 comparator_regex = re.compile("(<|>|=)")
-guard_offset_regex = re.compile("([+-] *[0-9]+) *(<|>|=)")
+guard_offset_regex = re.compile("([+-] *[0-9]+(?:\.[0-9]*)?) *(<|>|=)")
 
 def parse_guard(eq):
     '''
@@ -185,7 +187,8 @@ def parse_guard(eq):
     # Then determine linear parameters
     params = {}
     for mm in re.finditer(eq_params_regex, eq):
-        params[mm.group(2)] = float(mm.group(1).replace(' ', ''))
+        i = float(mm.group(1).replace(' ', '')) if not mm.group(1) is None else 1.0
+        params[mm.group(2)] = i
 
     # Finally, find offset
     offset = 0
