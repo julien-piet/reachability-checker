@@ -1,27 +1,30 @@
 {
     "vars": ["t", "x"],
     "nodes":{
-        "Start": {
+        "OFF": {
             "eqs": [
-                "x' = 1x + [ -0.1 ; +0.1 ]"
+                "x' = -0.02x + [ 0 ; 0 ]"
             ],
             "guard": [
-                "x - 5 < 0"
+                "x - 15 > 0"
             ]
             },
-        "End": {
+        "ON": {
             "eqs": [
-                "x' = -1x + [ 0 ; 1 ]"
+                "x' = -0.05x + [ 1.15 ; 1.15 ]"
+            ],
+            "guard": [
+                "x - 23 < 0"
             ]
             }
         },
         
     "links":[
         {
-            "src": "Start",
-            "dst": "End",
+            "src": "OFF",
+            "dst": "ON",
             "guard": [
-                "x - 4 = 0"
+                "x - 17 = 0"
             ],
             "update": [
                 "x = x",
@@ -29,10 +32,10 @@
             ]
         },
         {
-            "src": "End",
-            "dst": "Start",
+            "src": "ON",
+            "dst": "OFF",
             "guard": [
-                "x - 0.9 = 0"
+                "x - 21 = 0"
             ],
             "update": [
                 "x = x",
@@ -43,9 +46,9 @@
     
     "init": [
         "t = [0; 0]",
-        "x = [1; 1]"
+        "x = [15; 23]"
     ], 
 
-    "entry": "Start"
+    "entry": "OFF"
 }
             

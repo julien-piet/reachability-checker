@@ -109,7 +109,7 @@ def parse_equation(eq):
 ###############################################################################
 
 update_name_regex = re.compile("([a-zA-Z]+) *= *")
-update_offset_regex = re.compile("([+-] *[0-9]+(?:\.[0-9]*)?) *$")
+update_offset_regex = re.compile("([+-]? *[0-9]+(?:\.[0-9]*)?) *$")
 
 def parse_update_system(eqs, variables, update_type):
     '''
@@ -150,6 +150,7 @@ def parse_update(eq):
     if m:
         offset = float(m.group(1).replace(' ',''))  
     
+    print({'var': var_name, 'params': params, 'offset': offset})
     return {'var': var_name, 'params': params, 'offset': offset}
 
 ###############################################################################

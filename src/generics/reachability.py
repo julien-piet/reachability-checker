@@ -44,9 +44,11 @@ class Reachability:
 
             eq = state.node.equation
             val = state.values
-            links = state.node.links
-            trs = self.solver.solve(eq, val, links, T, self.colors[state.node.name])
+            node = state.node
+            trs = self.solver.solve(eq, val, node, T, self.colors[state.node.name])
             for tr in trs:
                 next_states.append(State(tr.link.dst, tr.values))
 
+        for s in next_states:
+            print(s)
         self.states = next_states

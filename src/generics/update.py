@@ -12,11 +12,7 @@ class Update:
     def __init__(self, A, B):
         self.A = A
         self.B = B
-        
-    def update(self, values):
-        for v in values:
-            v = A @ v + B
-        return values
+        print(self)
         
     def __str__(self):
-        return "X = " + str(self.A) + " X + " + str(self.B) + "\n"
+        return "X = " + str(self.A) + " X + " + str(self.B)

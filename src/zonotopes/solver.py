@@ -33,13 +33,13 @@ class Solver:
         self.r = r
         self.m = m
 
-    def solve(self, eq, init, links, T, c):
+    def solve(self, eq, init, node, T, c):
         self.set_params(eq.A, init, eq.mu)
         trs = []
         while self.t < T:
             self.step()
             self.Q.plot(c)
-            for l in links:
+            for l in node.links:
                 if self.Q.is_intersecting(l.guard):
                     trs.append(Transition(l, self.Q))
         return trs
