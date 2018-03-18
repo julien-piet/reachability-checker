@@ -2,7 +2,7 @@ from src.generics.reachability import Reachability
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.old.continuous_range_calculator import solver
+from src.polygons.continuous_range_calculator import solver
 s = solver(0.1)
 r = Reachability(s, "examples/example-1D.json")
 
