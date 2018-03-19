@@ -6,6 +6,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage[titlepage,fancysections]{polytechnique}
 \usepackage{hyperref}
+\usepackage{caption}
 
 \title{Implementation d'un outil de vérification d'automates linéaires hybrides}
 \author{Baptiste Pecatte \& Julien Piet}
@@ -73,29 +74,22 @@ Les mises à jour et les gardes peuvent incorporer des composantes temporelles, e
 
 Nous avons introduit le temps en tant de variable dans ce calcul, grâce à la manipulation de matrices $2 \times 2$, afin de pouvoir manipuler des équations temporelles. Ensuite, nous avons introduit les notions de gardes grâce à un algorithme d'intersection entre la garde, un hyperplan affine, et chaque polygone. L'object généré étant un polygone, il est alors possible de réitérer l'algorithme de résolution d'équation sur un autre noeud pour continuer les approximations d'atteignabilité. Voici le rendu final de cette méthode, sur un automate à deux états : 
 
-\begin{figure}[htbp]
 \begin{center}
 \includegraphics[scale=0.5]{1D.png}
-\caption{Sortie de l'algorithme pour la dimension 1}
-\label{Sortie en 1D}
+\captionof{figure}{Sortie de l'algorithme pour la dimension 1}\label{Sortie en 1D}
 \end{center}
-\end{figure}
 
 \subparagraph{}  Ensuite, nous avons voulu développer un algorithme général en N-Dimensions à l'aide de la représentation matricielle d'un polyèdre convexe général. Malheureusement, après implémentation de cette classe, nous nous sommes rendus comptes de la difficulté de calculer l'intersection de deux polyèdres convexes, ce qui a rendu cette méthode inutilisable. Néanmoins, nous avons codé une méthode de résolution à l'aide d'hypercubes, qui même si très inefficace, fonctionnait. Le souci d'une telle méthode est qu'elle n'est difficilement scalable à des dimensions supérieures à 1, car l'application de la matrice de transformation d'un état $t$ à $t+d$ peut engendrer des rotations, voire toutes les applications orthogonales du groupe $O(n)$. Les hypercubes ne s'adaptent bien qu'aux translations et dilatations, mais englobent de manière bien trop approximative les transformations plus subtiles.
 
 \subparagraph{}  Nous nous sommes donc tournés vers un papier sur les zonotopes \cite{hscc2005} pour implémenter cette méthode en dimension N.
-Les zonotopes sont une classe de polygone ayant des propriétés particulières. Moins précises que les enveloppes convexes quand il s'agit d'approximer un ensemble quelconque, elles ont l'avantage d'etre très facile à stocker, et d'avoir des opérations faciles à calculer (somme de Minkowski, et application linéaire).En utilisant la somme de Minkowski, on peut obtenir simplement une approximation des valeurs prises par l'équation entre 0 et t, puis on peut obtenir en temps linéaire et en espace constant les valeurs prises par l'équation pour ttout les intervals successifs [n*t; n*(t+1)].
-Une fois que nous sommes capable d'obtenir une sur-estimation de l'ensemble des valeurs prises par l'équation différentielles, pour un zonotope donné initial, il nous faut alors déterminer quand les guardes sont prises. Il n'est pas facile de calculer l'intersection entre un hyperplan et un zonotope. En revanche, il est facile de déterminer si l'intersection est non-nulle. On peut alors sur-approximer l'intersection d'un zonotope et d'un hyperplan au zonotope lui-même.
-De cette façon, nous obtenons une méthode d'analyse n-dimensionnelle, beaucoup plus précise que les hypercubes, mais ayant un coût de calcul relativement faible.
+Les zonotopes sont une classe de polygone ayant des propriétés particulières. Moins précises que les enveloppes convexes quand il s'agit d'approximer un ensemble quelconque, elles ont l'avantage d'être très facile à stocker, et d'avoir des opérations faciles à calculer (somme de Minkowski, et application linéaire). En utilisant la somme de Minkowski, on peut obtenir simplement une approximation des valeurs prises par l'équation entre $0$ et $t$, puis on peut obtenir en temps linéaire et en espace constant les valeurs prises par l'équation pour tout les intervals successifs $[nt; n(t+1)]$.
 
+\subparagraph{} Une fois que nous sommes capables d'obtenir une sur-estimation de l'ensemble des valeurs prises par l'équation différentielles, pour un zonotope donné initial, il nous faut alors déterminer quand les gardes sont prises. Il n'est pas facile de calculer l'intersection entre un hyperplan et un zonotope. En revanche, il est facile de déterminer si l'intersection est non-nulle. On peut alors sur-approximer l'intersection d'un zonotope et d'un hyperplan au zonotope lui-même. De cette façon, nous obtenons une méthode d'analyse n-dimensionnelle, beaucoup plus précise que les hypercubes, mais ayant un coût de calcul relativement faible.
 
-\begin{figure}[htbp]
 \begin{center}
 \includegraphics[scale=0.5]{zonotopes.png}
-\caption{Sortie de l'algorithme utilisant les zonotopes}
-\label{Sortie en ND}
+\captionof{figure}{Sortie de l'algorithme utilisant les zonotopes}\label{Sortie en ND}
 \end{center}
-\end{figure}
 
 \subparagraph{}  Enfin, nous avons créé un parseur pour automatiquement générer des automates à partir de leur description textuelle, et une interface générique pour représenter chaque classe, comme le solveur, les noeuds, les gardes, ou encore l'algorithme d'itération. Cela nous permet d'implémenter à la fois la version complète N-dimensionnelle ainsi que la version 1-dimensionnelle en manipulant des classes ayant le même prototype. 
 
