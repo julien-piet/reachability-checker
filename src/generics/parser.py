@@ -68,7 +68,7 @@ def parse_system(eqs, variables, eq_type):
         Parse an array of lin dif eq, and create the corresponding n-dimensional equation X' = AX + O(E)
     '''
     A = np.zeros((len(variables), len(variables)))
-    B = np.array([[0, 0] for i in range(len(variables))])
+    B = [[0, 0] for i in range(len(variables))]
     for eq in eqs:
         e = parse_equation(eq)
         i = get_var(variables, e['var'])
@@ -77,7 +77,7 @@ def parse_system(eqs, variables, eq_type):
             A[i][j] = e['params'][p]
         B[i] = e['error'].toList()
 
-    return eq_type.fromSystem(A, B)
+    return eq_type.fromSystem(A, np.array(B))
 
 def parse_equation(eq):
     '''
@@ -103,7 +103,7 @@ def parse_equation(eq):
             error.fromMax(float(m.group(2)))
         else:
             error.fromInterval(m.group(3), float(m.group(4)), float(m.group(5)))    
-    
+
     return {'var': var_name, 'params': params, 'error': error}
 
 ###############################################################################
@@ -149,8 +149,7 @@ def parse_update(eq):
     m = re.search(update_offset_regex, eq)
     if m:
         offset = float(m.group(1).replace(' ',''))  
-    
-    print({'var': var_name, 'params': params, 'offset': offset})
+
     return {'var': var_name, 'params': params, 'offset': offset}
 
 ###############################################################################

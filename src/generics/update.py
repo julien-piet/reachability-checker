@@ -12,7 +12,6 @@ class Update:
     def __init__(self, A, B):
         self.A = A
         self.B = B
-        print(self)
         
     def __str__(self):
         return "X = " + str(self.A) + " X + " + str(self.B)

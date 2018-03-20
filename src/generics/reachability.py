@@ -49,6 +49,4 @@ class Reachability:
             for tr in trs:
                 next_states.append(State(tr.link.dst, tr.values))
 
-        for s in next_states:
-            print(s)
         self.states = next_states

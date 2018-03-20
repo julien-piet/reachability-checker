@@ -179,9 +179,17 @@ class Polygon:
             returns True if both polygons share at least one point, with error eps
         '''
         for i in self.points:
-            for j in other.points:
+            test = True
+            for idx, j in enumerate(other.points):
                 if (np.linalg.norm(i-j) < eps):
                     return True
+                side = j - other.points[idx-1]
+                vect = i - other.points[idx-1]
+                if np.cross(vect, side) <= -eps:
+                    test = False
+            if test:
+                return True
+                    
         return False
         
     def multiply(self, f):
@@ -276,8 +284,23 @@ class solver:
         self.reach[0] = init_val
         self.range = []
         
+        # Border equations
         eq = node.equation
-        self.beta = np.array([[self.d, eq.delta[0] * ((np.exp(eq.a * self.d) - 1) / eq.a)],[self.d, eq.delta[1] * ((np.exp(eq.a * self.d) - 1) / eq.a)]])
+        alpha = eq.a
+        self.low_eq = lambda t,t0,x0: (eq.delta[0] / alpha) * ( np.exp( alpha * (t - t0) ) - 1 ) + x0 * np.exp( alpha * (t - t0) )
+        self.high_eq = lambda t,t0,x0: (eq.delta[1] / alpha) * ( np.exp( alpha * (t - t0) ) - 1 ) + x0 * np.exp( alpha * (t - t0) )
+        
+        # Find two generator points
+        self.generators = [init_val.points[0], init_val.points[-1]]
+        y_axis_values = [self.low_eq(0,self.generators[0][0],self.generators[0][1]),self.low_eq(0,self.generators[1][0],self.generators[1][1])]
+        for p in init_val:
+            if self.low_eq(0,p[0],p[1]) < y_axis_values[0]:
+                self.generators[0] = p
+                y_axis_values[0] = self.low_eq(0,p[0],p[1])
+            if self.high_eq(0,p[0],p[1]) > y_axis_values[1]:
+                self.generators[1] = p
+                y_axis_values[1] = self.high_eq(0,p[0],p[1])
+            
         
         self.reach[0].plot(c="red")
         
@@ -289,7 +312,7 @@ class solver:
         current_step = 0
         trs = []
         for i in range(self.n):
-            self.iteration(current_step, self.beta)
+            self.iteration(current_step)
             current_step += 1
             
             # Intersecting with node guard
@@ -335,32 +358,39 @@ class solver:
                 new_set.values = Polygon.union(new_set.values,set.values)
             trs.append(new_set)
         return trs
+        
+    def exp(alpha, beta, y0, t):
+        return [(beta / alpha)(1 - np.exp(alpha * i)) ++ y0 * np.exp(alpha * i) for i in t]
    
-    def iteration(self, current_step, beta):
+    def iteration(self, current_step):
         ''' 
             Calculate Reach for the next step
         '''
         d = self.d
-        # First, calculate the next reach
-        self.reach[current_step+1] = self.reach[current_step].multiply(np.array([[1, 0],[0, np.exp(self.d * self.a)]])).fuzz(beta)
+        t = current_step * d
         
-        # Now, update range (optimize here - Uses polygons)
-        # Polygon calculation
-        # secant --- y : gamma * t + b
-        # tangent -- y : gamma * t + phi
-        min_point = self.reach[current_step].min_point()
-        start = min_point[1]
-        A = self.a
-        t = min_point[0]
-        gamma = start * (np.exp(A*d) - 1)  / d
-        b = start - (gamma * t)
-        phi = gamma * (1 - A*t - np.log((gamma / (start * A)))) / A if start != 0 else b
-
-        #Adding to range
-        pts = []
-        max_point = self.reach[current_step].max_point()
-        pts.append(max_point)
-        pts.append([t, phi + (gamma * t) + beta[1][1]])
-        pts.append([t+self.d, phi + (gamma * (t+self.d)) + beta[1][1]])
-        pts.append(self.reach[current_step+1].max_point())
-        self.range.append(Polygon(pts))
+        # First, calculate the next reach. This is done from the literal formula, because of the issues non linearity causes to the propagation formula
+        new_points = [[t+d+p[0], self.low_eq(t+d+p[0],p[0],p[1])] for p in self.reach[0]] + [[t+d+p[0], self.high_eq(t+d+p[0],p[0],p[1])] for p in self.reach[0]]
+        self.reach[current_step+1] = Polygon(new_points)
+        
+        # Next, compute the new range of values, using the two set generators
+        new_points = [p for p in self.reach[current_step + 1].points] + [p for p in self.reach[current_step].points]
+        # Start with min : 
+        # Tangent equation : x : at + c
+        # Secant equation : x : at + b
+        a = (1 / d) * (self.low_eq(t + self.generators[0][0] + d, self.generators[0][0], self.generators[0][1]) - self.low_eq(t + self.generators[0][0], self.generators[0][0], self.generators[0][1]))
+        if a is not 0:
+            gamma = a / (self.eq.delta[0] + self.a * self.generators[0][1])
+            c = (self.eq.delta[0] /  self.a) * (gamma - 1) + self.generators[0][1] * gamma - (a / self.a) * np.log(gamma) - a * self.generators[0][0]
+            new_points.append(np.array([t + self.generators[0][0], a * (t + self.generators[0][0]) + c]))
+            new_points.append(np.array([t + d + self.generators[0][0], a * (t + d + self.generators[0][0]) + c]))
+            
+        # Now with max
+        a = (1 / d) * (self.high_eq(t + self.generators[1][0] + d, self.generators[1][0], self.generators[1][1]) - self.high_eq(t + self.generators[1][0], self.generators[1][0], self.generators[1][1]))
+        if a is not 0:
+            gamma = a / (self.eq.delta[0] + self.a * self.generators[1][1])
+            c = (self.eq.delta[0] /  self.a) * (gamma - 1) + self.generators[1][1] * gamma - (a / self.a) * np.log(gamma) - a * self.generators[1][0]
+            new_points.append(np.array([t + self.generators[1][0], a * (t + self.generators[1][0]) + c]))
+            new_points.append(np.array([t + d + self.generators[1][0], a * (t + d + self.generators[1][0]) + c]))
+            
+        self.range.append(Polygon(new_points))
